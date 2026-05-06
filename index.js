@@ -209,7 +209,12 @@ client.on("interactionCreate", async (interaction) => {
         leagueId = generateLeagueId();
       } while (db.leagues[leagueId]);
 
-      await interaction.deferReply();
+      try {
+        await interaction.deferReply();
+      } catch (err) {
+        console.error("deferReply error:", err.message);
+        return;
+      }
 
       let thread = null;
       try {
@@ -248,19 +253,34 @@ client.on("interactionCreate", async (interaction) => {
       const embed = buildLeagueEmbed(league);
       const row = buildJoinRow(leagueId, league.players.length >= maxPlayers);
 
-      await interaction.channel.send(`<@&${LEAGUES_PING_ROLE_ID}>`);
-      const msg = await interaction.editReply({
-        embeds: [embed],
-        components: [row],
-      });
+      try {
+        await interaction.channel.send(`<@&${LEAGUES_PING_ROLE_ID}>`);
+      } catch (err) {
+        console.error("Ping send error:", err.message);
+      }
+
+      let msg;
+      try {
+        msg = await interaction.editReply({
+          embeds: [embed],
+          components: [row],
+        });
+      } catch (err) {
+        console.error("editReply error:", err.message);
+        return;
+      }
 
       db.leagues[leagueId].messageId = msg.id;
       saveDB(db);
 
       if (thread) {
-        await thread.send(
-          `League **${leagueId}** has been opened.\n\n**Format:** ${format}  |  **Match Type:** ${matchType}  |  **Perks:** ${perks}  |  **Region:** ${region}\n\nThis is your private league thread. Players will be added here as they join.`
-        );
+        try {
+          await thread.send(
+            `League **${leagueId}** has been opened.\n\n**Format:** ${format}  |  **Match Type:** ${matchType}  |  **Perks:** ${perks}  |  **Region:** ${region}\n\nThis is your private league thread. Players will be added here as they join.`
+          );
+        } catch (err) {
+          console.error("Thread open message error:", err.message);
+        }
       }
 
       return;
@@ -268,10 +288,15 @@ client.on("interactionCreate", async (interaction) => {
 
     if (sub === "cancel") {
       if (!interaction.member.roles.cache.has(LEAGUE_HOST_ROLE_ID)) {
-        return interaction.reply({
-          content: "You do not have permission to cancel leagues.",
-          ephemeral: true,
-        });
+        try {
+          return await interaction.reply({
+            content: "You do not have permission to cancel leagues.",
+            ephemeral: true,
+          });
+        } catch (err) {
+          console.error("interaction.reply error:", err.message);
+          return;
+        }
       }
 
       const rawId = interaction.options.getString("id");
@@ -280,10 +305,15 @@ client.on("interactionCreate", async (interaction) => {
       const league = db.leagues[id];
 
       if (!league || !league.active) {
-        return interaction.reply({
-          content: `No active league found with ID \`${id}\`.`,
-          ephemeral: true,
-        });
+        try {
+          return await interaction.reply({
+            content: `No active league found with ID \`${id}\`.`,
+            ephemeral: true,
+          });
+        } catch (err) {
+          console.error("interaction.reply error:", err.message);
+          return;
+        }
       }
 
       if (league.threadId) {
@@ -323,10 +353,14 @@ client.on("interactionCreate", async (interaction) => {
       db.leagues[id].active = false;
       saveDB(db);
 
-      return interaction.reply({
-        content: `League \`${id}\` has been cancelled.`,
-        ephemeral: true,
-      });
+      try {
+        return await interaction.reply({
+          content: `League \`${id}\` has been cancelled.`,
+          ephemeral: true,
+        });
+      } catch (err) {
+        console.error("interaction.reply error:", err.message);
+      }
     }
   }
 
@@ -339,24 +373,39 @@ client.on("interactionCreate", async (interaction) => {
     const league = db.leagues[leagueId];
 
     if (!league || !league.active) {
-      return interaction.reply({
-        content: "This league is no longer active.",
-        ephemeral: true,
-      });
+      try {
+        return await interaction.reply({
+          content: "This league is no longer active.",
+          ephemeral: true,
+        });
+      } catch (err) {
+        console.error("interaction.reply error:", err.message);
+        return;
+      }
     }
 
     if (league.players.includes(interaction.user.id)) {
-      return interaction.reply({
-        content: "You have already joined this league.",
-        ephemeral: true,
-      });
+      try {
+        return await interaction.reply({
+          content: "You have already joined this league.",
+          ephemeral: true,
+        });
+      } catch (err) {
+        console.error("interaction.reply error:", err.message);
+        return;
+      }
     }
 
     if (league.players.length >= league.maxPlayers) {
-      return interaction.reply({
-        content: "This league is full.",
-        ephemeral: true,
-      });
+      try {
+        return await interaction.reply({
+          content: "This league is full.",
+          ephemeral: true,
+        });
+      } catch (err) {
+        console.error("interaction.reply error:", err.message);
+        return;
+      }
     }
 
     db.leagues[leagueId].players.push(interaction.user.id);
@@ -383,7 +432,11 @@ client.on("interactionCreate", async (interaction) => {
     const embed = buildLeagueEmbed(updatedLeague);
     const row = buildJoinRow(leagueId, isFull);
 
-    await interaction.update({ embeds: [embed], components: [row] });
+    try {
+      await interaction.update({ embeds: [embed], components: [row] });
+    } catch (err) {
+      console.error("interaction.update error:", err.message);
+    }
 
     if (isFull) {
       db.leagues[leagueId].active = false;
@@ -418,6 +471,10 @@ if (!CLIENT_ID) {
   console.error("Missing CLIENT_ID environment variable.");
   process.exit(1);
 }
+
+process.on("unhandledRejection", (reason, promise) => {
+  console.error("Unhandled Rejection at:", promise, "reason:", reason);
+});
 
 client.login(TOKEN).catch((err) => {
   console.error("Login failed:", err.message);
