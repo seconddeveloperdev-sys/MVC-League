@@ -24,8 +24,17 @@
       "guildId": "1462383117477220405",
       "open": false,
       "createdAt": "2026-05-11T15:10:42.997Z"
+    },
+    "2": {
+      "id": 2,
+      "ticketNum": "0002",
+      "userId": "1180944141291634728",
+      "channelId": "1503431594797437068",
+      "guildId": "1462383117477220405",
+      "open": false,
+      "createdAt": "2026-05-11T16:20:25.532Z"
     }
   },
-  "ticketCounter": 1,
+  "ticketCounter": 2,
   "tryoutPanelMessageId": "1503413034234810388"
 }
