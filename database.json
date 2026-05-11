@@ -1,6 +1,19 @@
 {
   "leagues": {},
   "giveaways": {},
-  "tournaments": {},
+  "tournaments": {
+    "VBUU8R": {
+      "id": "VBUU8R",
+      "ft": 3,
+      "prize": "Test",
+      "type": "2v2",
+      "bannedMap": null,
+      "serverLink": null,
+      "hostId": "1180944141291634728",
+      "guildId": "1462383117477220405",
+      "channelId": "1462387328503910585",
+      "createdAt": "2026-05-08T15:54:29.183Z"
+    }
+  },
   "tryouts": {}
 }
