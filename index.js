@@ -25,6 +25,7 @@ const LEAGUE_HOST_ROLE_ID = "1500064722312233050";
 const LEAGUES_PING_ROLE_ID = "1500068561174003853";
 
 const TRYOUT_MANAGER_ROLE_ID = "1491729945062277220";
+const TRYOUT_CHANNEL_ID = "1491183434561749123";
 
 const TOURNAMENT_HOST_ROLE_ID = "1503089031649431582";
 const TOURNAMENT_CHANNEL_ID = "1462389214313451561";
@@ -293,15 +294,6 @@ async function registerCommands() {
       )
       .toJSON(),
 
-    // /tryout setup — posts the ticket panel
-    new SlashCommandBuilder()
-      .setName("tryout")
-      .setDescription("Tryout ticket management")
-      .addSubcommand((sub) =>
-        sub.setName("setup").setDescription("Post the tryout ticket panel in this channel")
-      )
-      .toJSON(),
-
     // /giveaway
     new SlashCommandBuilder()
       .setName("giveaway")
@@ -324,6 +316,16 @@ async function registerCommands() {
         sub.setName("end").setDescription("End a giveaway early")
           .addStringOption((opt) =>
             opt.setName("id").setDescription("Giveaway ID").setRequired(true)
+          )
+      )
+      .addSubcommand((sub) =>
+        sub.setName("reroll").setDescription("Reroll a new winner for an ended giveaway")
+          .addStringOption((opt) =>
+            opt.setName("id").setDescription("Giveaway ID").setRequired(true)
+          )
+          .addIntegerOption((opt) =>
+            opt.setName("winners").setDescription("How many winners to reroll (default: 1)")
+              .setRequired(false).setMinValue(1).setMaxValue(20)
           )
       )
       .toJSON(),
@@ -399,11 +401,31 @@ client.once("clientReady", async () => {
   console.log(`Bot online: ${client.user.tag}`);
   await registerCommands();
   const db = loadDB();
+
+  // Re-schedule active giveaways
   for (const giveaway of Object.values(db.giveaways)) {
     if (giveaway.active) {
       scheduleGiveaway(giveaway, client);
       console.log(`Re-scheduled giveaway: ${giveaway.id}`);
     }
+  }
+
+  // Auto-post tryout panel once — skip if already posted
+  if (!db.tryoutPanelMessageId) {
+    try {
+      const tryoutChannel = await client.channels.fetch(TRYOUT_CHANNEL_ID);
+      const panelMsg = await tryoutChannel.send({
+        embeds: [buildTryoutPanelEmbed()],
+        components: [buildTryoutPanelRow()],
+      });
+      db.tryoutPanelMessageId = panelMsg.id;
+      saveDB(db);
+      console.log(`Tryout panel posted (message ${panelMsg.id}).`);
+    } catch (err) {
+      console.error("Failed to post tryout panel:", err.message);
+    }
+  } else {
+    console.log(`Tryout panel already posted (message ${db.tryoutPanelMessageId}). Skipping.`);
   }
 });
 
@@ -523,17 +545,6 @@ client.on("interactionCreate", async (interaction) => {
     }
   }
 
-  // ── /tryout setup ─────────────────────────────────────────────────────────────
-  if (interaction.isChatInputCommand() && interaction.commandName === "tryout") {
-    const sub = interaction.options.getSubcommand();
-    if (sub === "setup") {
-      await interaction.reply({
-        embeds: [buildTryoutPanelEmbed()],
-        components: [buildTryoutPanelRow()],
-      });
-    }
-  }
-
   // ── /giveaway ─────────────────────────────────────────────────────────────────
   if (interaction.isChatInputCommand() && interaction.commandName === "giveaway") {
     const sub = interaction.options.getSubcommand();
@@ -573,6 +584,62 @@ client.on("interactionCreate", async (interaction) => {
       }
       await interaction.reply({ content: `Ending giveaway \`${id}\`...`, ephemeral: true });
       await endGiveaway(id, client);
+      return;
+    }
+
+    if (sub === "reroll") {
+      const id = interaction.options.getString("id").trim().toUpperCase();
+      const winnerCount = interaction.options.getInteger("winners") ?? 1;
+      const db = loadDB();
+      const giveaway = db.giveaways[id];
+
+      if (!giveaway) {
+        return interaction.reply({ content: `No giveaway found with ID \`${id}\`.`, ephemeral: true });
+      }
+      if (giveaway.active) {
+        return interaction.reply({ content: `Giveaway \`${id}\` is still active. End it first.`, ephemeral: true });
+      }
+
+      await interaction.deferReply();
+
+      try {
+        const channel = await client.channels.fetch(giveaway.channelId);
+        const msg = await channel.messages.fetch(giveaway.messageId);
+        const reaction = msg.reactions.cache.get("🎉");
+
+        let entries = [];
+        if (reaction) {
+          const users = await reaction.users.fetch();
+          entries = users.filter((u) => !u.bot).map((u) => u.id);
+        }
+
+        if (entries.length === 0) {
+          return interaction.editReply({ content: `No valid entries found for giveaway \`${id}\`. Cannot reroll.` });
+        }
+
+        const picked = [...entries]
+          .sort(() => Math.random() - 0.5)
+          .slice(0, Math.min(winnerCount, entries.length));
+
+        const rerollEmbed = new EmbedBuilder()
+          .setTitle("Giveaway Reroll")
+          .setColor(0x5865f2)
+          .addFields(
+            { name: "Prize", value: giveaway.prize, inline: false },
+            { name: "New Winner(s)", value: picked.map((w) => `<@${w}>`).join(", "), inline: false },
+            { name: "Rerolled By", value: `<@${interaction.user.id}>`, inline: true }
+          )
+          .setFooter({ text: `Giveaway ID: ${id}` })
+          .setTimestamp();
+
+        await interaction.editReply({ embeds: [rerollEmbed] });
+        await channel.send(
+          `Congratulations ${picked.map((w) => `<@${w}>`).join(", ")}! You have been rerolled as the new winner of the **${giveaway.prize}** giveaway!`
+        );
+      } catch (err) {
+        console.error("Giveaway reroll error:", err.message);
+        return interaction.editReply({ content: "Failed to reroll. The original giveaway message may have been deleted." });
+      }
       return;
     }
   }
