@@ -15,5 +15,17 @@
       "createdAt": "2026-05-08T15:54:29.183Z"
     }
   },
-  "tryouts": {}
+  "tryouts": {
+    "1": {
+      "id": 1,
+      "ticketNum": "0001",
+      "userId": "1180944141291634728",
+      "channelId": "1503414051567308940",
+      "guildId": "1462383117477220405",
+      "open": false,
+      "createdAt": "2026-05-11T15:10:42.997Z"
+    }
+  },
+  "ticketCounter": 1,
+  "tryoutPanelMessageId": "1503413034234810388"
 }
