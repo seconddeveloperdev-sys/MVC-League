@@ -511,8 +511,8 @@ client.on("interactionCreate", async (interaction) => {
           try {
             const thread = await interaction.guild.channels.fetch(league.threadId);
             if (thread) {
-              await thread.send(`League **${id}** has been cancelled. This thread will now be archived.`);
-              await thread.setArchived(true);
+              await thread.send(`League **${id}** has been cancelled. Deleting thread in 3 seconds...`);
+              setTimeout(() => thread.delete("League cancelled.").catch(() => {}), 3000);
             }
           } catch (err) { console.error("Thread archive error:", err.message); }
         }
