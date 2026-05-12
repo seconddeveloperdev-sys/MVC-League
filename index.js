@@ -76,14 +76,9 @@ function padTicketNumber(n) {
   return String(n).padStart(4, "0");
 }
 
-// ─── Role check helper (works without GuildMembers intent) ────────────────────
-async function memberHasRole(guild, userId, roleId) {
-  try {
-    const member = await guild.members.fetch(userId);
-    return member.roles.cache.has(roleId);
-  } catch {
-    return false;
-  }
+// Role check — uses the member object Discord sends with every interaction (instant, no API call)
+function hasRole(interaction, roleId) {
+  return interaction.member.roles.cache.has(roleId);
 }
 
 // ─── League ───────────────────────────────────────────────────────────────────
@@ -369,12 +364,13 @@ async function registerCommands() {
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
   ],
 });
+
+client.on("error", (err) => console.error("Client error:", err.message));
 
 client.once("clientReady", async () => {
   console.log(`Bot online: ${client.user.tag}`);
@@ -444,8 +440,7 @@ client.on("interactionCreate", async (interaction) => {
         if (interaction.channelId !== LEAGUE_CHANNEL_ID) {
           return interaction.reply({ content: `Leagues can only be hosted in <#${LEAGUE_CHANNEL_ID}>.`, ephemeral: true });
         }
-        const hasRole = await memberHasRole(interaction.guild, interaction.user.id, LEAGUE_HOST_ROLE_ID);
-        if (!hasRole) {
+        if (!hasRole(interaction, LEAGUE_HOST_ROLE_ID)) {
           return interaction.reply({ content: "You do not have permission to host leagues.", ephemeral: true });
         }
 
@@ -497,8 +492,7 @@ client.on("interactionCreate", async (interaction) => {
 
       // ── league cancel ────────────────────────────────────────────────────────
       if (sub === "cancel") {
-        const hasRole = await memberHasRole(interaction.guild, interaction.user.id, LEAGUE_HOST_ROLE_ID);
-        if (!hasRole) {
+        if (!hasRole(interaction, LEAGUE_HOST_ROLE_ID)) {
           return interaction.reply({ content: "You do not have permission to cancel leagues.", ephemeral: true });
         }
         const id  = interaction.options.getString("id").trim().toUpperCase();
@@ -535,8 +529,7 @@ client.on("interactionCreate", async (interaction) => {
 
       // ── league add ───────────────────────────────────────────────────────────
       if (sub === "add") {
-        const hasRole = await memberHasRole(interaction.guild, interaction.user.id, LEAGUE_HOST_ROLE_ID);
-        if (!hasRole) {
+        if (!hasRole(interaction, LEAGUE_HOST_ROLE_ID)) {
           return interaction.reply({ content: "You do not have permission to manage leagues.", ephemeral: true });
         }
         const id     = interaction.options.getString("id").trim().toUpperCase();
@@ -582,8 +575,7 @@ client.on("interactionCreate", async (interaction) => {
 
       // ── league remove ────────────────────────────────────────────────────────
       if (sub === "remove") {
-        const hasRole = await memberHasRole(interaction.guild, interaction.user.id, LEAGUE_HOST_ROLE_ID);
-        if (!hasRole) {
+        if (!hasRole(interaction, LEAGUE_HOST_ROLE_ID)) {
           return interaction.reply({ content: "You do not have permission to manage leagues.", ephemeral: true });
         }
         const id     = interaction.options.getString("id").trim().toUpperCase();
@@ -627,9 +619,8 @@ client.on("interactionCreate", async (interaction) => {
 
     // ── /giveaway ──────────────────────────────────────────────────────────────
     if (interaction.isChatInputCommand() && interaction.commandName === "giveaway") {
-      const sub     = interaction.options.getSubcommand();
-      const hasRole = await memberHasRole(interaction.guild, interaction.user.id, GIVEAWAY_HOST_ROLE_ID);
-      if (!hasRole) {
+      const sub = interaction.options.getSubcommand();
+      if (!hasRole(interaction, GIVEAWAY_HOST_ROLE_ID)) {
         return interaction.reply({ content: "You do not have permission to manage giveaways.", ephemeral: true });
       }
 
@@ -728,8 +719,7 @@ client.on("interactionCreate", async (interaction) => {
         if (interaction.channelId !== TOURNAMENT_CHANNEL_ID) {
           return interaction.reply({ content: `Tournaments can only be hosted in <#${TOURNAMENT_CHANNEL_ID}>.`, ephemeral: true });
         }
-        const hasRole = await memberHasRole(interaction.guild, interaction.user.id, TOURNAMENT_HOST_ROLE_ID);
-        if (!hasRole) {
+        if (!hasRole(interaction, TOURNAMENT_HOST_ROLE_ID)) {
           return interaction.reply({ content: "You do not have permission to host tournaments.", ephemeral: true });
         }
         const ft         = interaction.options.getInteger("ft");
@@ -759,8 +749,7 @@ client.on("interactionCreate", async (interaction) => {
       }
 
       if (sub === "cancel") {
-        const hasRole = await memberHasRole(interaction.guild, interaction.user.id, TOURNAMENT_HOST_ROLE_ID);
-        if (!hasRole) {
+        if (!hasRole(interaction, TOURNAMENT_HOST_ROLE_ID)) {
           return interaction.reply({ content: "You do not have permission to cancel tournaments.", ephemeral: true });
         }
         const id = interaction.options.getString("id").trim().toUpperCase();
@@ -797,7 +786,7 @@ client.on("interactionCreate", async (interaction) => {
         if (!ticket) {
           return interaction.reply({ content: "This channel is not an open ticket.", ephemeral: true });
         }
-        const isTryoutManager = await memberHasRole(interaction.guild, interaction.user.id, TRYOUT_MANAGER_ROLE_ID);
+        const isTryoutManager = hasRole(interaction, TRYOUT_MANAGER_ROLE_ID);
         const isTicketOwner   = ticket.userId === interaction.user.id;
         if (!isTryoutManager && !isTicketOwner) {
           return interaction.reply({ content: "You do not have permission to close this ticket.", ephemeral: true });
@@ -924,7 +913,7 @@ client.on("interactionCreate", async (interaction) => {
         if (!ticket || !ticket.open) {
           return interaction.reply({ content: "This ticket is already closed.", ephemeral: true });
         }
-        const isTryoutManager = await memberHasRole(interaction.guild, interaction.user.id, TRYOUT_MANAGER_ROLE_ID);
+        const isTryoutManager = hasRole(interaction, TRYOUT_MANAGER_ROLE_ID);
         const isTicketOwner   = ticket.userId === interaction.user.id;
         if (!isTryoutManager && !isTicketOwner) {
           return interaction.reply({ content: "You do not have permission to close this ticket.", ephemeral: true });
