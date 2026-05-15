@@ -11,6 +11,9 @@ const {
   Routes,
   ThreadAutoArchiveDuration,
   PermissionFlagsBits,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
 } = require("discord.js");
 
 const fs = require("fs");
@@ -20,7 +23,7 @@ process.on("unhandledRejection", (reason) => {
   console.error("Unhandled rejection:", reason);
 });
 
-// ─── Config ───────────────────────────────────────────────────────────────────
+// ─── Config ────────────────────────────────────────────────────────────[...]
 const TOKEN = process.env.DISCORD_TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 
@@ -28,23 +31,24 @@ const LEAGUE_CHANNEL_ID      = "1462387975022186621";
 const LEAGUE_HOST_ROLE_ID    = "1500064722312233050";
 const LEAGUES_PING_ROLE_ID   = "1500068561174003853";
 
-const TRYOUT_MANAGER_ROLE_ID = "1491729945062277220";
+const TRYOUT_MANAGER_ROLE_ID = "1504836079650476065";
 const TRYOUT_CHANNEL_ID      = "1491183434561749123";
 
 const TOURNAMENT_HOST_ROLE_ID = "1503089031649431582";
 const TOURNAMENT_CHANNEL_ID   = "1462389214313451561";
+const TOURNAMENT_SIGNUPS_CHANNEL_ID = "1462389355568959529";
 
 const GIVEAWAY_HOST_ROLE_ID   = "1503089031649431582";
 
 const DB_PATH = "./database.json";
 
-// ─── Spam Config ──────────────────────────────────────────────────────────────
+// ─── Spam Config ──────────────────────────────────────────────────────────[...]
 const SPAM_LIMIT    = 5;
 const SPAM_WINDOW   = 5000;
 const WARN_COOLDOWN = 15000;
 const spamMap       = new Map();
 
-// ─── Database ─────────────────────────────────────────────────────────────────
+// ─── Database ───────────────────────────────────────────────────────────[...]
 function loadDB() {
   if (!fs.existsSync(DB_PATH)) {
     const def = { leagues: {}, giveaways: {}, tournaments: {}, tryouts: {}, ticketCounter: 0 };
@@ -81,7 +85,7 @@ function hasRole(interaction, roleId) {
   return interaction.member.roles.cache.has(roleId);
 }
 
-// ─── League ───────────────────────────────────────────────────────────────────
+// ─── League ────────────────────────────────────────────────────────────[...]
 function getMaxPlayers(format) {
   return parseInt(format.charAt(0)) * 2;
 }
@@ -118,7 +122,7 @@ function buildJoinRow(leagueId, disabled = false) {
   );
 }
 
-// ─── Giveaway ─────────────────────────────────────────────────────────────────
+// ─── Giveaway ───────────────────────────────────────────────────────────[...]
 const giveawayTimers = new Map();
 
 function buildGiveawayEmbed(giveaway) {
@@ -181,7 +185,7 @@ function scheduleGiveaway(giveaway, client) {
   giveawayTimers.set(giveaway.id, timer);
 }
 
-// ─── Tournament ───────────────────────────────────────────────────────────────
+// ─── Tournament ──────────────────────────────────────────────────────────[...]
 const TOURNAMENT_RULES = [
   "**Tournament Disclaimers**",
   "",
@@ -212,13 +216,21 @@ function buildTournamentEmbed(tournament) {
 }
 
 function buildTournamentRow(tournament) {
-  if (!tournament.serverLink) return null;
-  return new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setLabel("Join Server").setStyle(ButtonStyle.Link).setURL(tournament.serverLink)
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`tournament_signup_${tournament.id}`)
+      .setLabel("Sign Up")
+      .setStyle(ButtonStyle.Primary)
   );
+  if (tournament.serverLink) {
+    row.addComponents(
+      new ButtonBuilder().setLabel("Join Server").setStyle(ButtonStyle.Link).setURL(tournament.serverLink)
+    );
+  }
+  return row;
 }
 
-// ─── Tryout Panel ─────────────────────────────────────────────────────────────
+// ─── Tryout Panel ────────────────────────────────────────────────────────[...]
 function buildTryoutPanelEmbed() {
   return new EmbedBuilder()
     .setTitle("TRYOUT REQUEST")
@@ -242,6 +254,127 @@ function buildCloseRow(ticketId) {
       .setLabel("Close")
       .setStyle(ButtonStyle.Danger)
   );
+}
+
+// ─── Tryout Form Modal ───────────────────────────────────────────────────
+function buildTryoutFormModal() {
+  return new ModalBuilder()
+    .setCustomId("tryout_form_modal")
+    .setTitle("Tryout Request Form")
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("tryout_roblox_username")
+          .setLabel("Roblox username")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("enter your username")
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("tryout_platform")
+          .setLabel("Platform")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("PC/MOB/XBOX")
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("tryout_server_link")
+          .setLabel("Paste your private server link")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("paste here")
+          .setRequired(true)
+      )
+    );
+}
+
+// ─── Tournament Signup Form Modal ────────────────────────────────────────
+function buildTournamentSignupModal(tournamentId) {
+  return new ModalBuilder()
+    .setCustomId(`tournament_signup_form_${tournamentId}`)
+    .setTitle("Tournament Sign Up")
+    .addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("tournament_roblox_username")
+          .setLabel("Roblox username")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("enter your username")
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("tournament_rank")
+          .setLabel("Rank")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("e.g. Diamond, Gold")
+          .setRequired(true)
+      ),
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("tournament_discord_username")
+          .setLabel("Discord username")
+          .setStyle(TextInputStyle.Short)
+          .setPlaceholder("your discord username")
+          .setRequired(true)
+      )
+    );
+}
+
+// Tournament host approval buttons
+function buildTournamentApprovalRow(tournamentId, userId) {
+  return new ActionRowBuilder().addComponents(
+    new ButtonBuilder()
+      .setCustomId(`tournament_accept_${tournamentId}_${userId}`)
+      .setLabel("Accept")
+      .setStyle(ButtonStyle.Success),
+    new ButtonBuilder()
+      .setCustomId(`tournament_decline_${tournamentId}_${userId}`)
+      .setLabel("Decline")
+      .setStyle(ButtonStyle.Danger)
+  );
+}
+
+// Update tournament signups counter
+async function updateTournamentSignupCounter(client, tournamentId) {
+  const db = loadDB();
+  const tournament = db.tournaments[tournamentId];
+  if (!tournament) return;
+
+  const signupCount = (tournament.signups || []).length;
+  const maxPlayers = getMaxPlayers(tournament.type);
+  
+  try {
+    const channel = await client.channels.fetch(TOURNAMENT_SIGNUPS_CHANNEL_ID);
+    let message = null;
+    
+    if (tournament.signupMessageId) {
+      try {
+        message = await channel.messages.fetch(tournament.signupMessageId);
+      } catch (err) {
+        console.log("Signup message not found, creating new one");
+      }
+    }
+
+    const signupEmbed = new EmbedBuilder()
+      .setTitle(`Tournament ${tournamentId} Sign Ups`)
+      .setColor(0xe67e22)
+      .addFields(
+        { name: "Players Joined", value: `${signupCount}/${maxPlayers}`, inline: false }
+      )
+      .setTimestamp();
+
+    if (message) {
+      await message.edit({ embeds: [signupEmbed] });
+    } else {
+      const newMsg = await channel.send({ embeds: [signupEmbed] });
+      db.tournaments[tournamentId].signupMessageId = newMsg.id;
+      saveDB(db);
+    }
+  } catch (err) {
+    console.error("Failed to update tournament signup counter:", err.message);
+  }
 }
 
 // ─── Command Registration ─────────────────────────────────────────────────────
@@ -360,19 +493,20 @@ async function registerCommands() {
   }
 }
 
-// ─── Client ───────────────────────────────────────────────────────────────────
+// ─── Client ──────────────────────────────────────────────────────────[...]
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.MessageContent,
+    GatewayIntentBits.DirectMessages,
   ],
 });
 
 client.on("error", (err) => console.error("Client error:", err.message));
 
-client.once("clientReady", async () => {
+client.once("ready", async () => {
   console.log(`Bot online: ${client.user.tag}`);
   await registerCommands();
   const db = loadDB();
@@ -402,7 +536,7 @@ client.once("clientReady", async () => {
   }
 });
 
-// ─── Spam Detection ───────────────────────────────────────────────────────────
+// ─── Spam Detection ─────────────────────────────────────────────────────────[...]
 client.on("messageCreate", async (message) => {
   if (message.author.bot || !message.guild) return;
   const userId = message.author.id;
@@ -427,15 +561,15 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-// ─── Interactions ─────────────────────────────────────────────────────────────
+// ─── Interactions ──────────────────────────────────────────────────────────[...]
 client.on("interactionCreate", async (interaction) => {
   try {
 
-    // ── /league ────────────────────────────────────────────────────────────────
+    // ── /league ───────────────────────────────────────────────────────────[...]
     if (interaction.isChatInputCommand() && interaction.commandName === "league") {
       const sub = interaction.options.getSubcommand();
 
-      // ── league host ──────────────────────────────────────────────────────────
+      // ── league host ─────────────────────────────────────────────────────────[...]
       if (sub === "host") {
         if (interaction.channelId !== LEAGUE_CHANNEL_ID) {
           return interaction.reply({ content: `Leagues can only be hosted in <#${LEAGUE_CHANNEL_ID}>.`, ephemeral: true });
@@ -454,12 +588,12 @@ client.on("interactionCreate", async (interaction) => {
 
         await interaction.deferReply();
 
-        // Public thread — works in any server without Community/Boost requirements
+        // Private thread — only players who joined can see it
         let thread = null;
         try {
           thread = await interaction.channel.threads.create({
             name: `League ${leagueId}`,
-            type: ChannelType.PublicThread,
+            type: ChannelType.PrivateThread,
             autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
           });
         } catch (err) { console.error("Thread creation error:", err.message); }
@@ -527,7 +661,7 @@ client.on("interactionCreate", async (interaction) => {
         return interaction.reply({ content: `League \`${id}\` has been cancelled.`, ephemeral: true });
       }
 
-      // ── league add ───────────────────────────────────────────────────────────
+      // ── league add ─────────────────────────────────────────────────────────[...]
       if (sub === "add") {
         if (!hasRole(interaction, LEAGUE_HOST_ROLE_ID)) {
           return interaction.reply({ content: "You do not have permission to manage leagues.", ephemeral: true });
@@ -617,7 +751,7 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
-    // ── /giveaway ──────────────────────────────────────────────────────────────
+    // ── /giveaway ──────────────────────────────────────────────────────────[...]
     if (interaction.isChatInputCommand() && interaction.commandName === "giveaway") {
       const sub = interaction.options.getSubcommand();
       if (!hasRole(interaction, GIVEAWAY_HOST_ROLE_ID)) {
@@ -711,7 +845,7 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
-    // ── /tournament ────────────────────────────────────────────────────────────
+    // ── /tournament ────────────────────────────────────────────────────────[...]
     if (interaction.isChatInputCommand() && interaction.commandName === "tournament") {
       const sub = interaction.options.getSubcommand();
 
@@ -735,16 +869,17 @@ client.on("interactionCreate", async (interaction) => {
           guildId: interaction.guildId,
           channelId: interaction.channelId,
           messageId: null, active: true,
+          signups: [],
+          signupMessageId: null,
           createdAt: new Date().toISOString(),
         };
         const embed        = buildTournamentEmbed(tournament);
         const row          = buildTournamentRow(tournament);
-        const replyOptions = { embeds: [embed], fetchReply: true };
-        if (row) replyOptions.components = [row];
-        const msg = await interaction.reply(replyOptions);
+        const msg = await interaction.reply({ embeds: [embed], components: [row], fetchReply: true });
         tournament.messageId = msg.id;
         db.tournaments[tourneyId] = tournament;
         saveDB(db);
+        await updateTournamentSignupCounter(client, tourneyId);
         return;
       }
 
@@ -776,7 +911,7 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
-    // ── /ticket ────────────────────────────────────────────────────────────────
+    // ── /ticket ────────────────────────────────────────────────────────────[...]
     if (interaction.isChatInputCommand() && interaction.commandName === "ticket") {
       if (interaction.options.getSubcommand() === "close") {
         const db = loadDB();
@@ -803,50 +938,14 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
-    // ── Buttons ────────────────────────────────────────────────────────────────
-    if (interaction.isButton()) {
-      const { customId } = interaction;
+    // ── Modal Submissions ──────────────────────────────────────────────────────
+    if (interaction.isModalSubmit()) {
+      // Tryout form submission
+      if (interaction.customId === "tryout_form_modal") {
+        const robloxUsername = interaction.fields.getTextInputValue("tryout_roblox_username");
+        const platform = interaction.fields.getTextInputValue("tryout_platform");
+        const serverLink = interaction.fields.getTextInputValue("tryout_server_link");
 
-      // Join League button
-      if (customId.startsWith("join_league_")) {
-        const leagueId = customId.replace("join_league_", "");
-        const db = loadDB();
-        const league = db.leagues[leagueId];
-        if (!league || !league.active) {
-          return interaction.reply({ content: "This league is no longer active.", ephemeral: true });
-        }
-        if (league.players.includes(interaction.user.id)) {
-          return interaction.reply({ content: "You have already joined this league.", ephemeral: true });
-        }
-        if (league.players.length >= league.maxPlayers) {
-          return interaction.reply({ content: "This league is full.", ephemeral: true });
-        }
-        db.leagues[leagueId].players.push(interaction.user.id);
-        const updated = db.leagues[leagueId];
-        const isFull  = updated.players.length >= updated.maxPlayers;
-        if (isFull) db.leagues[leagueId].active = false;
-        saveDB(db);
-
-        if (updated.threadId) {
-          try {
-            const thread = await interaction.guild.channels.fetch(updated.threadId);
-            if (thread) {
-              await thread.members.add(interaction.user.id);
-              await thread.send(`<@${interaction.user.id}> has joined the league. (${updated.players.length} / ${updated.maxPlayers})`);
-              if (isFull) {
-                const allMentions = updated.players.map((p) => `<@${p}>`).join(" ");
-                await thread.send(`${allMentions}\n\nThe league is now full!\n\n**Format:** ${updated.format}  |  **Match Type:** ${updated.matchType}  |  **Perks:** ${updated.perks}  |  **Region:** ${updated.region}\n\nGood luck.`);
-              }
-            }
-          } catch (err) { console.error("Thread join error:", err.message); }
-        }
-
-        await interaction.update({ embeds: [buildLeagueEmbed(updated)], components: [buildJoinRow(leagueId, isFull)] });
-        return;
-      }
-
-      // Create Tryout Ticket button
-      if (customId === "create_tryout_ticket") {
         await interaction.deferReply({ ephemeral: true });
 
         const db = loadDB();
@@ -882,13 +981,23 @@ client.on("interactionCreate", async (interaction) => {
           return interaction.editReply({ content: "Failed to create your ticket channel. Make sure the bot has the **Manage Channels** permission." });
         }
 
+        const formEmbed = new EmbedBuilder()
+          .setTitle("Tryout Request Form")
+          .setColor(0x5865f2)
+          .addFields(
+            { name: "Roblox username", value: robloxUsername, inline: false },
+            { name: "Platform", value: platform, inline: false },
+            { name: "Private server link", value: serverLink, inline: false }
+          )
+          .setTimestamp();
+
         const welcomeEmbed = new EmbedBuilder()
           .setDescription("Support will be with you shortly.\nTo close this ticket press the close button.")
           .setColor(0x57f287);
 
         await ticketChannel.send({
-          content: `<@${interaction.user.id}> Welcome, Kindly wait till our <@&${TRYOUT_MANAGER_ROLE_ID}> responds the ticket`,
-          embeds: [welcomeEmbed],
+          content: `<@${interaction.user.id}> Welcome, Kindly wait till our <@&${TRYOUT_MANAGER_ROLE_ID}> responds to the ticket`,
+          embeds: [welcomeEmbed, formEmbed],
           components: [buildCloseRow(ticketId)],
         });
 
@@ -898,11 +1007,175 @@ client.on("interactionCreate", async (interaction) => {
           channelId: ticketChannel.id,
           guildId: interaction.guildId,
           open: true,
+          formData: { robloxUsername, platform, serverLink },
           createdAt: new Date().toISOString(),
         };
         saveDB(db);
 
         return interaction.editReply({ content: `Your ticket has been created: <#${ticketChannel.id}>` });
+      }
+
+      // Tournament signup form submission
+      if (interaction.customId.startsWith("tournament_signup_form_")) {
+        const tournamentId = interaction.customId.replace("tournament_signup_form_", "");
+        const robloxUsername = interaction.fields.getTextInputValue("tournament_roblox_username");
+        const rank = interaction.fields.getTextInputValue("tournament_rank");
+        const discordUsername = interaction.fields.getTextInputValue("tournament_discord_username");
+
+        const db = loadDB();
+        const tournament = db.tournaments[tournamentId];
+        if (!tournament) {
+          return interaction.reply({ content: "Tournament not found.", ephemeral: true });
+        }
+
+        // Send DM to tournament host
+        try {
+          const hostUser = await client.users.fetch(tournament.hostId);
+          const signupEmbed = new EmbedBuilder()
+            .setTitle("New Tournament Sign Up")
+            .setColor(0xe67e22)
+            .addFields(
+              { name: "Tournament", value: tournamentId, inline: false },
+              { name: "Roblox username", value: robloxUsername, inline: true },
+              { name: "Rank", value: rank, inline: true },
+              { name: "Discord username", value: discordUsername, inline: true },
+              { name: "Applicant", value: `<@${interaction.user.id}>`, inline: false }
+            )
+            .setTimestamp();
+
+          await hostUser.send({
+            embeds: [signupEmbed],
+            components: [buildTournamentApprovalRow(tournamentId, interaction.user.id)],
+          });
+        } catch (err) {
+          console.error("Failed to send DM to tournament host:", err.message);
+          return interaction.reply({ content: "Failed to send your application to the host.", ephemeral: true });
+        }
+
+        await interaction.reply({ content: "Your application has been sent to the tournament host! Please wait for their response.", ephemeral: true });
+      }
+    }
+
+    // ── Buttons ────────────────────────────────────────────────────────────[...]
+    if (interaction.isButton()) {
+      const { customId } = interaction;
+
+      // Join League button
+      if (customId.startsWith("join_league_")) {
+        const leagueId = customId.replace("join_league_", "");
+        const db = loadDB();
+        const league = db.leagues[leagueId];
+        if (!league || !league.active) {
+          return interaction.reply({ content: "This league is no longer active.", ephemeral: true });
+        }
+        if (league.players.includes(interaction.user.id)) {
+          return interaction.reply({ content: "You have already joined this league.", ephemeral: true });
+        }
+        if (league.players.length >= league.maxPlayers) {
+          return interaction.reply({ content: "This league is full.", ephemeral: true });
+        }
+        db.leagues[leagueId].players.push(interaction.user.id);
+        const updated = db.leagues[leagueId];
+        const isFull  = updated.players.length >= updated.maxPlayers;
+        if (isFull) db.leagues[leagueId].active = false;
+        saveDB(db);
+
+        if (updated.threadId) {
+          try {
+            const thread = await interaction.guild.channels.fetch(updated.threadId);
+            if (thread) {
+              await thread.members.add(interaction.user.id);
+              await thread.send(`<@${interaction.user.id}> has joined the league. (${updated.players.length} / ${updated.maxPlayers})`);
+              if (isFull) {
+                const allMentions = updated.players.map((p) => `<@${p}>`).join(" ");
+                await thread.send(`${allMentions}\n\nThe league is now full!\n\n**Format:** ${updated.format}  |  **Match Type:** ${updated.matchType}  |  **Perks:** ${updated.perks}  |  **Region:** ${updated.region}`);
+              }
+            }
+          } catch (err) { console.error("Thread join error:", err.message); }
+        }
+
+        await interaction.update({ embeds: [buildLeagueEmbed(updated)], components: [buildJoinRow(leagueId, isFull)] });
+        return;
+      }
+
+      // Tournament signup button
+      if (customId.startsWith("tournament_signup_")) {
+        const tournamentId = customId.replace("tournament_signup_", "");
+        await interaction.showModal(buildTournamentSignupModal(tournamentId));
+        return;
+      }
+
+      // Tournament accept button
+      if (customId.startsWith("tournament_accept_")) {
+        const parts = customId.replace("tournament_accept_", "").split("_");
+        const tournamentId = parts[0];
+        const userId = parts[1];
+
+        const db = loadDB();
+        const tournament = db.tournaments[tournamentId];
+        if (!tournament) {
+          return interaction.reply({ content: "Tournament not found.", ephemeral: true });
+        }
+
+        // Check if user is the host
+        if (interaction.user.id !== tournament.hostId) {
+          return interaction.reply({ content: "Only the tournament host can accept signups.", ephemeral: true });
+        }
+
+        // Add user to signups
+        if (!tournament.signups) tournament.signups = [];
+        if (!tournament.signups.includes(userId)) {
+          tournament.signups.push(userId);
+          db.tournaments[tournamentId] = tournament;
+          saveDB(db);
+        }
+
+        await interaction.reply({ content: `Accepted <@${userId}> for the tournament!`, ephemeral: true });
+        await updateTournamentSignupCounter(client, tournamentId);
+
+        // Try to DM the applicant
+        try {
+          const user = await client.users.fetch(userId);
+          await user.send(`You have been accepted for tournament **${tournamentId}**!`);
+        } catch (err) {
+          console.log("Could not DM user:", err.message);
+        }
+        return;
+      }
+
+      // Tournament decline button
+      if (customId.startsWith("tournament_decline_")) {
+        const parts = customId.replace("tournament_decline_", "").split("_");
+        const tournamentId = parts[0];
+        const userId = parts[1];
+
+        const db = loadDB();
+        const tournament = db.tournaments[tournamentId];
+        if (!tournament) {
+          return interaction.reply({ content: "Tournament not found.", ephemeral: true });
+        }
+
+        // Check if user is the host
+        if (interaction.user.id !== tournament.hostId) {
+          return interaction.reply({ content: "Only the tournament host can decline signups.", ephemeral: true });
+        }
+
+        await interaction.reply({ content: `Declined <@${userId}> for the tournament.`, ephemeral: true });
+
+        // Try to DM the applicant
+        try {
+          const user = await client.users.fetch(userId);
+          await user.send(`You have been declined for tournament **${tournamentId}**.`);
+        } catch (err) {
+          console.log("Could not DM user:", err.message);
+        }
+        return;
+      }
+
+      // Create Tryout Ticket button
+      if (customId === "create_tryout_ticket") {
+        await interaction.showModal(buildTryoutFormModal());
+        return;
       }
 
       // Close Ticket button
@@ -941,7 +1214,7 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-// ─── Startup Checks ───────────────────────────────────────────────────────────
+// ─── Startup Checks ───────────────────────────────────────────────────────[...]
 if (!TOKEN)     { console.error("Missing DISCORD_TOKEN."); process.exit(1); }
 if (!CLIENT_ID) { console.error("Missing CLIENT_ID.");     process.exit(1); }
 
