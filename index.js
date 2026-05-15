@@ -147,69 +147,35 @@ async function endGiveaway(giveawayId, client) {
   db.giveaways[giveawayId].active = false;
   saveDB(db);
   giveawayTimers.delete(giveawayId);
-
-  let channel, msg, entries = [];
   try {
-    channel = await client.channels.fetch(giveaway.channelId);
-    msg     = await channel.messages.fetch(giveaway.messageId);
-    // Fetch reaction users — cache may be empty after a restart so we
-    // always call .fetch() on the reaction object directly.
-    const reaction = msg.reactions.cache.get("🎉") ?? msg.reactions.resolve("🎉");
+    const channel  = await client.channels.fetch(giveaway.channelId);
+    const msg      = await channel.messages.fetch(giveaway.messageId);
+    const reaction = msg.reactions.cache.get("🎉");
+    let entries = [];
     if (reaction) {
       const users = await reaction.users.fetch();
       entries = users.filter((u) => !u.bot).map((u) => u.id);
     }
+    const winnerCount = Math.min(giveaway.winners, entries.length);
+    const winners     = [...entries].sort(() => Math.random() - 0.5).slice(0, winnerCount);
+    const endEmbed = new EmbedBuilder()
+      .setTitle("Giveaway Ended")
+      .setColor(0xed4245)
+      .addFields(
+        { name: "Prize",   value: giveaway.prize, inline: false },
+        { name: "Winners", value: winners.length > 0 ? winners.map((w) => `<@${w}>`).join(", ") : "No valid entries.", inline: false },
+        { name: "Total Entries", value: `${entries.length}`, inline: true },
+        { name: "Hosted By",     value: `<@${giveaway.hostId}>`, inline: true }
+      )
+      .setTimestamp();
+    await msg.edit({ embeds: [endEmbed] });
+    if (winners.length > 0) {
+      await channel.send(`Congratulations ${winners.map((w) => `<@${w}>`).join(", ")}! You have won the **${giveaway.prize}** giveaway.`);
+    } else {
+      await channel.send(`The giveaway for **${giveaway.prize}** has ended. No valid entries were found.`);
+    }
   } catch (err) {
-    console.error("Giveaway end — failed to fetch message/reactions:", err.message);
-  }
-
-  const winnerCount = Math.min(giveaway.winners, entries.length);
-  const winners     = [...entries].sort(() => Math.random() - 0.5).slice(0, winnerCount);
-
-  // Edit the original giveaway embed — failure here must NOT block the announcement.
-  if (msg) {
-    try {
-      const endEmbed = new EmbedBuilder()
-        .setTitle("Giveaway Ended")
-        .setColor(0xed4245)
-        .addFields(
-          { name: "Prize",         value: giveaway.prize, inline: false },
-          { name: "Winners",       value: winners.length > 0 ? winners.map((w) => `<@${w}>`).join(", ") : "No valid entries.", inline: false },
-          { name: "Total Entries", value: `${entries.length}`, inline: true },
-          { name: "Hosted By",     value: `<@${giveaway.hostId}>`, inline: true }
-        )
-        .setTimestamp();
-      await msg.edit({ embeds: [endEmbed] });
-    } catch (err) {
-      console.error("Giveaway end — failed to edit embed:", err.message);
-    }
-  }
-
-  // Always announce the winner, even if the embed edit failed.
-  if (channel) {
-    try {
-      if (winners.length > 0) {
-        const winnerMentions = winners.map((w) => `<@${w}>`).join(", ");
-        const winnerEmbed = new EmbedBuilder()
-          .setTitle("🎉 Giveaway Winner!")
-          .setColor(0x57f287)
-          .addFields(
-            { name: "Prize",     value: giveaway.prize,                    inline: false },
-            { name: "Winner(s)", value: winnerMentions,                    inline: false },
-            { name: "Hosted By", value: `<@${giveaway.hostId}>`,           inline: true  }
-          )
-          .setFooter({ text: `Giveaway ID: ${giveawayId}` })
-          .setTimestamp();
-        await channel.send({
-          content: `Congratulations ${winnerMentions}! You have won the **${giveaway.prize}** giveaway. 🎉`,
-          embeds: [winnerEmbed],
-        });
-      } else {
-        await channel.send(`The giveaway for **${giveaway.prize}** has ended. No valid entries were found.`);
-      }
-    } catch (err) {
-      console.error("Giveaway end — failed to send winner announcement:", err.message);
-    }
+    console.error("Giveaway end error:", err.message);
   }
 }
 
@@ -965,8 +931,8 @@ client.on("interactionCreate", async (interaction) => {
         saveDB(db);
         setTimeout(async () => {
           try {
-            const thread = await interaction.guild.channels.fetch(ticket.channelId);
-            if (thread) await thread.delete("Ticket closed via command.");
+            const ch = await interaction.guild.channels.fetch(ticket.channelId);
+            if (ch) await ch.delete("Ticket closed via command.");
           } catch (err) { console.error("Ticket delete error:", err.message); }
         }, 3000);
       }
@@ -997,22 +963,22 @@ client.on("interactionCreate", async (interaction) => {
         const ticketId  = db.ticketCounter;
         saveDB(db);
 
-        // Create a private thread in the tryout channel so only the applicant
-        // and Tryout Managers can see it — no extra text channel is created.
-        let ticketThread = null;
+        let ticketChannel = null;
         try {
-          const tryoutChannel = await client.channels.fetch(TRYOUT_CHANNEL_ID);
-          ticketThread = await tryoutChannel.threads.create({
+          ticketChannel = await interaction.guild.channels.create({
             name: `ticket-${ticketNum}`,
-            type: ChannelType.PrivateThread,
-            autoArchiveDuration: ThreadAutoArchiveDuration.OneDay,
+            type: ChannelType.GuildText,
+            permissionOverwrites: [
+              { id: interaction.guild.id,       deny:  [PermissionFlagsBits.ViewChannel] },
+              { id: interaction.user.id,         allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
+              { id: TRYOUT_MANAGER_ROLE_ID,      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] },
+              { id: client.user.id,              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels] },
+            ],
             reason: `Tryout ticket for ${interaction.user.tag}`,
           });
-          // Add the applicant so they can see the private thread
-          await ticketThread.members.add(interaction.user.id);
         } catch (err) {
-          console.error("Ticket thread creation error:", err.message);
-          return interaction.editReply({ content: "Failed to create your ticket thread. Make sure the bot has the **Create Private Threads** permission." });
+          console.error("Ticket channel creation error:", err.message);
+          return interaction.editReply({ content: "Failed to create your ticket channel. Make sure the bot has the **Manage Channels** permission." });
         }
 
         const formEmbed = new EmbedBuilder()
@@ -1029,7 +995,7 @@ client.on("interactionCreate", async (interaction) => {
           .setDescription("Support will be with you shortly.\nTo close this ticket press the close button.")
           .setColor(0x57f287);
 
-        await ticketThread.send({
+        await ticketChannel.send({
           content: `<@${interaction.user.id}> Welcome, Kindly wait till our <@&${TRYOUT_MANAGER_ROLE_ID}> responds to the ticket`,
           embeds: [welcomeEmbed, formEmbed],
           components: [buildCloseRow(ticketId)],
@@ -1038,7 +1004,7 @@ client.on("interactionCreate", async (interaction) => {
         db.tryouts[ticketId] = {
           id: ticketId, ticketNum,
           userId: interaction.user.id,
-          channelId: ticketThread.id,
+          channelId: ticketChannel.id,
           guildId: interaction.guildId,
           open: true,
           formData: { robloxUsername, platform, serverLink },
@@ -1046,7 +1012,7 @@ client.on("interactionCreate", async (interaction) => {
         };
         saveDB(db);
 
-        return interaction.editReply({ content: `Your ticket has been created: <#${ticketThread.id}>` });
+        return interaction.editReply({ content: `Your ticket has been created: <#${ticketChannel.id}>` });
       }
 
       // Tournament signup form submission
@@ -1230,8 +1196,8 @@ client.on("interactionCreate", async (interaction) => {
         saveDB(db);
         setTimeout(async () => {
           try {
-            const thread = await interaction.guild.channels.fetch(ticket.channelId);
-            if (thread) await thread.delete("Ticket closed.");
+            const ch = await interaction.guild.channels.fetch(ticket.channelId);
+            if (ch) await ch.delete("Ticket closed.");
           } catch (err) { console.error("Ticket delete error:", err.message); }
         }, 3000);
       }
