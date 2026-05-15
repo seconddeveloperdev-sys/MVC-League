@@ -1,10 +1,13 @@
 {
-  "name": "workspace",
-  "version": "0.0.0",
+  "name": "mvc-league",
+  "version": "1.0.0",
   "license": "MIT",
   "packageManager": "pnpm@10.11.0",
   "scripts": {
     "start": "node index.js"
   },
-  "private": true
+  "private": true,
+  "dependencies": {
+    "discord.js": "^14.18.0"
+  }
 }
