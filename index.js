@@ -42,13 +42,13 @@ const GIVEAWAY_HOST_ROLE_ID   = "1503089031649431582";
 
 const DB_PATH = "./database.json";
 
-// ─── Spam Config ──────────────────────────────────────────────────────────[...]
+// ─── Spam Config ─────────────────────────────────────────────────────────[...]
 const SPAM_LIMIT    = 5;
 const SPAM_WINDOW   = 5000;
 const WARN_COOLDOWN = 15000;
 const spamMap       = new Map();
 
-// ─── Database ───────────────────────────────────────────────────────────[...]
+// ─── Database ──────────────────────────────────────────────────────────[...]
 function loadDB() {
   if (!fs.existsSync(DB_PATH)) {
     const def = { leagues: {}, giveaways: {}, tournaments: {}, tryouts: {}, ticketCounter: 0 };
@@ -185,7 +185,7 @@ function scheduleGiveaway(giveaway, client) {
   giveawayTimers.set(giveaway.id, timer);
 }
 
-// ─── Tournament ──────────────────────────────────────────────────────────[...]
+// ─── Tournament ─────────────────────────────────────────────────────────[...]
 const TOURNAMENT_RULES = [
   "**Tournament Disclaimers**",
   "",
@@ -230,7 +230,7 @@ function buildTournamentRow(tournament) {
   return row;
 }
 
-// ─── Tryout Panel ────────────────────────────────────────────────────────[...]
+// ─── Tryout Panel ────────────────────────────────────────────────────────[[...]
 function buildTryoutPanelEmbed() {
   return new EmbedBuilder()
     .setTitle("TRYOUT REQUEST")
@@ -493,7 +493,7 @@ async function registerCommands() {
   }
 }
 
-// ─── Client ──────────────────────────────────────────────────────────[...]
+// ─── Client ──────────────────────────────────────────────────────────[[...]
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -561,7 +561,7 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-// ─── Interactions ──────────────────────────────────────────────────────────[...]
+// ─── Interactions ────────────────────────────────────────────────────────�[...]
 client.on("interactionCreate", async (interaction) => {
   try {
 
@@ -618,6 +618,10 @@ client.on("interactionCreate", async (interaction) => {
 
         if (thread) {
           await thread.members.add(interaction.user.id);
+          // Grant send message permission to league host
+          await thread.permissionOverwrites.edit(interaction.user.id, {
+            [PermissionFlagsBits.SendMessages]: true,
+          }).catch((err) => console.error("Failed to set thread permissions for host:", err.message));
           await thread.send(
             `League **${leagueId}** has been opened.\n\n**Format:** ${format}  |  **Match Type:** ${matchType}  |  **Perks:** ${perks}  |  **Region:** ${region}\n\nPlayers will appear here as they join.`
           );
@@ -625,7 +629,7 @@ client.on("interactionCreate", async (interaction) => {
         return;
       }
 
-      // ── league cancel ────────────────────────────────────────────────────────
+      // ── league cancel ───────────────────────────────────────────────────────[...]
       if (sub === "cancel") {
         if (!hasRole(interaction, LEAGUE_HOST_ROLE_ID)) {
           return interaction.reply({ content: "You do not have permission to cancel leagues.", ephemeral: true });
@@ -662,7 +666,7 @@ client.on("interactionCreate", async (interaction) => {
         return interaction.reply({ content: `League \`${id}\` has been cancelled.`, ephemeral: true });
       }
 
-      // ── league add ─────────────────────────────────────────────────────────[...]
+      // ── league add ────────────────────────────────────────────────────────[...]
       if (sub === "add") {
         if (!hasRole(interaction, LEAGUE_HOST_ROLE_ID)) {
           return interaction.reply({ content: "You do not have permission to manage leagues.", ephemeral: true });
@@ -692,6 +696,10 @@ client.on("interactionCreate", async (interaction) => {
             const thread = await interaction.guild.channels.fetch(updated.threadId);
             if (thread) {
               await thread.members.add(target.id);
+              // Grant send message permission to new member
+              await thread.permissionOverwrites.edit(target.id, {
+                [PermissionFlagsBits.SendMessages]: true,
+              }).catch((err) => console.error("Failed to set thread permissions for member:", err.message));
               await thread.send(`<@${target.id}> has been added to the league by <@${interaction.user.id}>. (${updated.players.length} / ${updated.maxPlayers})`);
             }
           } catch (err) { console.error("Thread add error:", err.message); }
@@ -708,7 +716,7 @@ client.on("interactionCreate", async (interaction) => {
         return interaction.reply({ content: `<@${target.id}> has been added to league \`${id}\`.`, ephemeral: true });
       }
 
-      // ── league remove ────────────────────────────────────────────────────────
+      // ── league remove ───────────────────────────────────────────────────────[...]
       if (sub === "remove") {
         if (!hasRole(interaction, LEAGUE_HOST_ROLE_ID)) {
           return interaction.reply({ content: "You do not have permission to manage leagues.", ephemeral: true });
@@ -752,7 +760,7 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
-    // ── /giveaway ──────────────────────────────────────────────────────────[...]
+    // ── /giveaway ─────────────────────────────────────────────────────────[...]
     if (interaction.isChatInputCommand() && interaction.commandName === "giveaway") {
       const sub = interaction.options.getSubcommand();
       if (!hasRole(interaction, GIVEAWAY_HOST_ROLE_ID)) {
@@ -846,7 +854,7 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
-    // ── /tournament ────────────────────────────────────────────────────────[...]
+    // ── /tournament ────────────────────────────────────────────────────────[[...]
     if (interaction.isChatInputCommand() && interaction.commandName === "tournament") {
       const sub = interaction.options.getSubcommand();
 
@@ -912,7 +920,7 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
-    // ── /ticket ────────────────────────────────────────────────────────────[...]
+    // ── /ticket ───────────────────────────────────────────────────────────[...]
     if (interaction.isChatInputCommand() && interaction.commandName === "ticket") {
       if (interaction.options.getSubcommand() === "close") {
         const db = loadDB();
@@ -972,7 +980,7 @@ client.on("interactionCreate", async (interaction) => {
             permissionOverwrites: [
               { id: interaction.guild.id,       deny:  [PermissionFlagsBits.ViewChannel] },
               { id: interaction.user.id,         allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] },
-              { id: TRYOUT_MANAGER_ROLE_ID,      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] },
+              { id: TRYOUT_MANAGER_ROLE_ID,      allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ManageChannels] },
               { id: client.user.id,              allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels] },
             ],
             reason: `Tryout ticket for ${interaction.user.tag}`,
@@ -1057,7 +1065,7 @@ client.on("interactionCreate", async (interaction) => {
       }
     }
 
-    // ── Buttons ────────────────────────────────────────────────────────────[...]
+    // ── Buttons ──────────────────────────────────────────────────────────[...]
     if (interaction.isButton()) {
       const { customId } = interaction;
 
@@ -1086,6 +1094,10 @@ client.on("interactionCreate", async (interaction) => {
             const thread = await interaction.guild.channels.fetch(updated.threadId);
             if (thread) {
               await thread.members.add(interaction.user.id);
+              // Grant send message permission to new member
+              await thread.permissionOverwrites.edit(interaction.user.id, {
+                [PermissionFlagsBits.SendMessages]: true,
+              }).catch((err) => console.error("Failed to set thread permissions:", err.message));
               await thread.send(`<@${interaction.user.id}> has joined the league. (${updated.players.length} / ${updated.maxPlayers})`);
               if (isFull) {
                 const allMentions = updated.players.map((p) => `<@${p}>`).join(" ");
@@ -1215,7 +1227,7 @@ client.on("interactionCreate", async (interaction) => {
   }
 });
 
-// ─── Startup Checks ───────────────────────────────────────────────────────[...]
+// ─── Startup Checks ───────────────────────────────────────────────────────[[...]
 if (!TOKEN)     { console.error("Missing DISCORD_TOKEN."); process.exit(1); }
 if (!CLIENT_ID) { console.error("Missing CLIENT_ID.");     process.exit(1); }
 
