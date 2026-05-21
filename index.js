@@ -617,6 +617,7 @@ client.on("interactionCreate", async (interaction) => {
         saveDB(db);
 
         if (thread) {
+          await thread.members.add(interaction.user.id);
           await thread.send(
             `League **${leagueId}** has been opened.\n\n**Format:** ${format}  |  **Match Type:** ${matchType}  |  **Perks:** ${perks}  |  **Region:** ${region}\n\nPlayers will appear here as they join.`
           );
